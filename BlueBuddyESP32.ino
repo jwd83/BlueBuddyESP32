@@ -106,7 +106,14 @@ void respond_to_command() {
       */
       case 'd':
       case 'q':
+        // disconnect
         SerialBT.end();
+        
+        // todo investigate adding delay before restarting pairing. device may just reconnect.
+        // using a bluetooth terminal this seems to work fine without delay.
+        
+        // begin pairing mode for next device
+        SerialBT.begin("BlueBuddy");
         break;
     }
   }
