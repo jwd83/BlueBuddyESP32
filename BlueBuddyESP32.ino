@@ -18,11 +18,15 @@
    IOT-Bus Pin Description
    5 On-board LED
 */
-#define PIN_LED           5
-#define SERIAL_BAUD       115200
+#define PIN_LED               5
+#define SERIAL_BAUD           115200
 
-#define MODE_BRIDGE     1
-#define MODE_COMMAND    2
+#define MODE_BRIDGE           1
+#define MODE_COMMAND          2
+
+#define PIN_COUNT_ADC         6
+
+#define ANALOG_SAMPLE_MS      50
 
 /*
    globals
@@ -32,7 +36,9 @@ BluetoothSerial SerialBT; //Object for Bluetooth
 uint32_t loop_mode = MODE_COMMAND;
 uint32_t blink_last = 0;
 uint32_t blink_rate = 1000;
-
+uint32_t adc_values[6] = {0, 0, 0, 0, 0, 0};
+//const uint32_t adc_pins[6] = {36, 39, 34, 35, 32, 33};
+const uint32_t adc_pins[6] = {0, 3, 4, 5, 6, 7};
 
 /**
    SETUP
@@ -74,9 +80,16 @@ void loop() {
       blink_led();
       break;
     case MODE_COMMAND:
+      sample_analogs();
       respond_to_command();
       break;
 
+  }
+}
+
+void sample_analogs() {
+  for (int i = 0; i < PIN_COUNT_ADC; i++) {
+    adc_values[i] = analogRead(adc_pins[i]);
   }
 }
 
@@ -88,33 +101,56 @@ void respond_to_command() {
     in = SerialBT.read();
     switch (in) {
       /*
-         a turns the LED on
+         0 turns the LED off
       */
-      case 'a':
+      case '0':
+        ledOff();
+        break;
+
+
+      /*
+         1 turns the LED on
+      */
+      case '1':
         ledOn();
         break;
 
       /*
-         b turns the LED off
+         instant sample of Analog inputs
       */
-      case 'b':
-        ledOff();
+      case 'a':
+
+        for (int i = 0; i < PIN_COUNT_ADC; i++) {
+          SerialBT.print(adc_values[i]);
+          if (i < PIN_COUNT_ADC - 1) {
+            SerialBT.print(",");
+          }
+        }
+        SerialBT.println();
         break;
 
       /*
-         d and q disconnect/quit
+         d and q Disconnect/Quit
       */
       case 'd':
       case 'q':
         // disconnect
         SerialBT.end();
-        
+
         // todo investigate adding delay before restarting pairing. device may just reconnect.
         // using a bluetooth terminal this seems to work fine without delay.
-        
+
         // begin pairing mode for next device
         SerialBT.begin("BlueBuddy");
         break;
+
+      /*
+         report free Heap memory
+      */
+      case 'h':
+        SerialBT.println(ESP.getFreeHeap());
+        break;
+
     }
   }
 }
@@ -144,9 +180,6 @@ void bridge_serials() {
   }
 }
 
-/**
-   helper functions
-*/
 
 void blink_led() {
   uint32_t cur = millis();
