@@ -27,6 +27,8 @@
 #define PIN_COUNT_ADC         6
 
 #define ANALOG_SAMPLE_MS      50
+#define ADC_MAX_BITS          4095.0
+#define ADC_MAX_VOLT          3.3
 
 /*
    globals
@@ -36,9 +38,12 @@ BluetoothSerial SerialBT; //Object for Bluetooth
 uint32_t loop_mode = MODE_COMMAND;
 uint32_t blink_last = 0;
 uint32_t blink_rate = 1000;
-uint32_t adc_values[6] = {0, 0, 0, 0, 0, 0};
-//const uint32_t adc_pins[6] = {36, 39, 34, 35, 32, 33};
-const uint32_t adc_pins[6] = {0, 3, 4, 5, 6, 7};
+uint32_t adc_values[PIN_COUNT_ADC] = {0, 0, 0, 0, 0, 0};
+//const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 34, 35, 32, 33};
+const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
+const double r1[PIN_COUNT_ADC] = {500000, 0, 0, 0, 0, 0 };
+const double r2[PIN_COUNT_ADC] = {100000, 0, 0, 0, 0, 0 };
+
 
 /**
    SETUP
@@ -149,6 +154,44 @@ void respond_to_command() {
       */
       case 'h':
         SerialBT.println(ESP.getFreeHeap());
+        break;
+
+
+      /*
+         instant sample of Analog voltages based on divider network
+      */
+      case 'v':
+
+        /*
+           loop through our analog pins
+        */
+        for (int i = 0; i < PIN_COUNT_ADC; i++) {
+
+          /*
+             store our adc reading and solve the pin voltage
+          */
+          double v = (double)adc_values[i];
+          v = v / ADC_MAX_BITS * ADC_MAX_VOLT;
+
+
+          /*
+             check if there is a resistor network in place to solve the input signal voltage
+          */
+
+
+          if (r1[i] != 0 && r2[i] != 0) {
+            /*
+               there is a resistor network, solve original input voltage
+            */
+
+            v = (v * (r1[i] + r2[i])) / r2[i];
+          }
+          SerialBT.print(v, 3);
+          if (i < PIN_COUNT_ADC - 1) {
+            SerialBT.print(",");
+          }
+        }
+        SerialBT.println();
         break;
 
     }
