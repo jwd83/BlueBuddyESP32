@@ -41,8 +41,8 @@ uint32_t blink_rate = 1000;
 uint32_t adc_values[PIN_COUNT_ADC] = {0, 0, 0, 0, 0, 0};
 //const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 34, 35, 32, 33};
 const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
-const double r1[PIN_COUNT_ADC] = {500000, 0, 0, 0, 0, 0 };
-const double r2[PIN_COUNT_ADC] = {100000, 0, 0, 0, 0, 0 };
+const double r1[PIN_COUNT_ADC] = {500000,  500000,  100000, 100000,   0, 0 };
+const double r2[PIN_COUNT_ADC] = {100000,  100000,  100000, 100000,   0, 0 };
 
 
 /**
@@ -154,6 +154,27 @@ void respond_to_command() {
       */
       case 'h':
         SerialBT.println(ESP.getFreeHeap());
+        break;
+
+
+      /*
+         report Resistor divider network
+      */
+      case 'r':
+
+        SerialBT.print("r1,");
+        for (int i = 0; i < PIN_COUNT_ADC; i++) {
+          SerialBT.print(r1[i], 0);
+          SerialBT.print(",");
+        }
+        SerialBT.print("r2,");
+        for (int i = 0; i < PIN_COUNT_ADC; i++) {
+          SerialBT.print(r2[i], 0);
+          if (i < PIN_COUNT_ADC - 1) {
+            SerialBT.print(",");
+          }
+        }
+        SerialBT.println();
         break;
 
 
