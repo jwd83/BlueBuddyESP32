@@ -21,25 +21,35 @@
    IOT-Bus Pin Description
    5 On-board LED
 */
-#define PIN_COUNT_ADC         6
-#define PIN_COUNT_DIGITAL     3
 
-#define PIN_RXD               1
-#define PIN_TXD               3
-#define PIN_CAN_RX            4
-#define PIN_CAN_TX            5     /* are CAN TX and the LED shared on iot bus? */
-#define PIN_LED               5
-#define PIN_SDA               21
-#define PIN_SCL               22
-#define PIN_DAC1              25
-#define PIN_DAC2              26
 
+#define PIN_RXD                       1
+#define PIN_DIGITAL_IN_1              2
+#define PIN_TXD                       3
+#define PIN_CAN_RX                    4
+#define PIN_CAN_TX                    5     /* are CAN TX and the LED shared on iot bus? */
+#define PIN_LED                       5
+// #define PIN_SPI_FLASH_1            6     /* reserved for the ESP32's SPI flash */
+// #define PIN_SPI_FLASH_2            7     /* reserved for the ESP32's SPI flash */
+// #define PIN_SPI_FLASH_3            8     /* reserved for the ESP32's SPI flash */
+// #define PIN_SPI_FLASH_4            9     /* reserved for the ESP32's SPI flash */
+// #define PIN_SPI_FLASH_5            10    /* reserved for the ESP32's SPI flash */
+// #define PIN_SPI_FLASH_6            11    /* reserved for the ESP32's SPI flash */
+#define PIN_DIGITAL_IN_2              16
+#define PIN_DIGITAL_IN_3              17
+#define PIN_SDA                       21
+#define PIN_SCL                       22
+#define PIN_DAC1                      25
+#define PIN_DAC2                      26
+
+
+#define PIN_COUNT_ADC                 6
+#define PIN_COUNT_DIGITAL_INPUTS      3
 
 #define SERIAL_BAUD           115200
 
 #define MODE_BRIDGE           1
 #define MODE_COMMAND          2
-
 
 #define ANALOG_SAMPLE_MS      50
 #define ADC_MAX_BITS          4095.0
@@ -48,11 +58,15 @@
 /*
    globals
 */
-const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 32, 33, 34, 35};
-// const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
+// const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 32, 33, 34, 35};
+const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
 const double r1[PIN_COUNT_ADC] = {500000,  500000,  100000, 100000,   0, 0 };
 const double r2[PIN_COUNT_ADC] = {100000,  100000,  100000, 100000,   0, 0 };
-const uint32_t digital_pins[PIN_COUNT_DIGITAL] = {2, 16, 17};
+const uint32_t digital_input_pins[PIN_COUNT_DIGITAL_INPUTS] = {
+  PIN_DIGITAL_IN_1, 
+  PIN_DIGITAL_IN_2, 
+  PIN_DIGITAL_IN_3
+};
 
 BluetoothSerial SerialBT; //Object for Bluetooth
 
@@ -69,6 +83,12 @@ uint32_t adc_values[PIN_COUNT_ADC] = {0, 0, 0, 0, 0, 0};
 void setup() {
 
   // setup our pins
+
+  // setup our digital inputs
+  for(int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
+    pinMode(digital_input_pins[i], INPUT);
+    
+  }
   pinMode(PIN_LED, OUTPUT);
 
 
@@ -82,11 +102,7 @@ void setup() {
 
   // start pairing mode
   SerialBT.begin("BlueBuddy");
-  Serial.print("started");
-
-  // begin to toggle LED to indiciate pairing
-  ledOff();
-
+  Serial.println("started");
 }
 
 /*
@@ -161,14 +177,15 @@ void respond_to_command() {
          get digital states
       */
       case 'd':
-        for (int i = 0; i < PIN_COUNT_DIGITAL; i++) {
-          if (digitalRead(i) == HIGH) {
+        for (int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
+          if (digitalRead(digital_input_pins[i]) == HIGH) {
             SerialBT.print("1");
           } else {
             SerialBT.print("0");
           }
         }
         SerialBT.println();
+        break;
 
       /*
          q quit/disconnect
