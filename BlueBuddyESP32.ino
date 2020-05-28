@@ -1,6 +1,9 @@
 /*
    bluebuddy accessory
    reformat code is Ctrl+T
+
+   add bridge mode to command mode escape (maybe 32c in a row?)
+
 */
 
 
@@ -18,13 +21,25 @@
    IOT-Bus Pin Description
    5 On-board LED
 */
+#define PIN_COUNT_ADC         6
+#define PIN_COUNT_DIGITAL     3
+
+#define PIN_RXD               1
+#define PIN_TXD               3
+#define PIN_CAN_RX            4
+#define PIN_CAN_TX            5     /* are CAN TX and the LED shared on iot bus? */
 #define PIN_LED               5
+#define PIN_SDA               21
+#define PIN_SCL               22
+#define PIN_DAC1              25
+#define PIN_DAC2              26
+
+
 #define SERIAL_BAUD           115200
 
 #define MODE_BRIDGE           1
 #define MODE_COMMAND          2
 
-#define PIN_COUNT_ADC         6
 
 #define ANALOG_SAMPLE_MS      50
 #define ADC_MAX_BITS          4095.0
@@ -33,16 +48,19 @@
 /*
    globals
 */
+const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 32, 33, 34, 35};
+// const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
+const double r1[PIN_COUNT_ADC] = {500000,  500000,  100000, 100000,   0, 0 };
+const double r2[PIN_COUNT_ADC] = {100000,  100000,  100000, 100000,   0, 0 };
+const uint32_t digital_pins[PIN_COUNT_DIGITAL] = {2, 16, 17};
+
 BluetoothSerial SerialBT; //Object for Bluetooth
 
 uint32_t loop_mode = MODE_COMMAND;
 uint32_t blink_last = 0;
 uint32_t blink_rate = 1000;
 uint32_t adc_values[PIN_COUNT_ADC] = {0, 0, 0, 0, 0, 0};
-//const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 34, 35, 32, 33};
-const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
-const double r1[PIN_COUNT_ADC] = {500000,  500000,  100000, 100000,   0, 0 };
-const double r2[PIN_COUNT_ADC] = {100000,  100000,  100000, 100000,   0, 0 };
+uint32_t
 
 
 /**
@@ -135,9 +153,28 @@ void respond_to_command() {
         break;
 
       /*
-         d and q Disconnect/Quit
+         change to bridge mode
+      */
+      case 'b':
+        mode = MODE_BRIDGE;
+        break;
+
+      /*
+         get digital states
       */
       case 'd':
+        for (int i = 0; i < PIN_COUNT_DIGITAL; i++) {
+          if (digitalRead(i) == HIGH) {
+            SerialBT.print("1")
+          } else {
+            SerialBT.print("0")
+          }
+        }
+        SerialBT.println();
+
+      /*
+         q quit/disconnect
+      */
       case 'q':
         // disconnect
         SerialBT.end();
@@ -264,4 +301,3 @@ void ledOn() {
 void ledOff() {
   digitalWrite(PIN_LED, LOW);
 }
-
