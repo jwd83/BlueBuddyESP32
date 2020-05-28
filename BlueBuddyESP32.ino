@@ -60,10 +60,8 @@ uint32_t loop_mode = MODE_COMMAND;
 uint32_t blink_last = 0;
 uint32_t blink_rate = 1000;
 uint32_t adc_values[PIN_COUNT_ADC] = {0, 0, 0, 0, 0, 0};
-uint32_t
 
-
-/**
+/*
    SETUP
    turn on bluetooth, wait for connection?
 */
@@ -91,7 +89,7 @@ void setup() {
 
 }
 
-/**
+/*
    LOOP
    check for connection?
    send & receive commands
@@ -156,7 +154,7 @@ void respond_to_command() {
          change to bridge mode
       */
       case 'b':
-        mode = MODE_BRIDGE;
+        loop_mode = MODE_BRIDGE;
         break;
 
       /*
@@ -165,9 +163,9 @@ void respond_to_command() {
       case 'd':
         for (int i = 0; i < PIN_COUNT_DIGITAL; i++) {
           if (digitalRead(i) == HIGH) {
-            SerialBT.print("1")
+            SerialBT.print("1");
           } else {
-            SerialBT.print("0")
+            SerialBT.print("0");
           }
         }
         SerialBT.println();
