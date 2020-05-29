@@ -46,14 +46,14 @@
 #define PIN_COUNT_ADC                 6
 #define PIN_COUNT_DIGITAL_INPUTS      3
 
-#define SERIAL_BAUD           115200
+#define SERIAL_BAUD                   115200
 
-#define MODE_BRIDGE           1
-#define MODE_COMMAND          2
+#define MODE_BRIDGE                   1
+#define MODE_COMMAND                  2
 
-#define ANALOG_SAMPLE_MS      50
-#define ADC_MAX_BITS          4095.0
-#define ADC_MAX_VOLT          3.3
+#define ADC_MAX_BITS                  4095.0
+#define ADC_MAX_VOLT                  3.3
+#define ADC_RING_SIZE                 50        /* 50 * 4 * 6 = ~1,200bytes */
 
 /*
    globals
@@ -73,7 +73,9 @@ BluetoothSerial SerialBT; //Object for Bluetooth
 uint32_t loop_mode = MODE_COMMAND;
 uint32_t blink_last = 0;
 uint32_t blink_rate = 1000;
-uint32_t adc_values[PIN_COUNT_ADC] = {0, 0, 0, 0, 0, 0};
+uint32_t adc_ring_buffer[PIN_COUNT_ADC][ADC_RING_SIZE];
+int32_t adc_ring_position = -1; // start at -1 as we will increment this
+uint32_t sample_count = 0;
 
 /*
    SETUP
@@ -103,6 +105,9 @@ void setup() {
   // start pairing mode
   SerialBT.begin("BlueBuddy");
   Serial.println("started");
+
+  // clear ring buffer out
+  clear_ring_buffer();
 }
 
 /*
@@ -125,13 +130,46 @@ void loop() {
 }
 
 void sample_analogs() {
+  // increment our position in the ring
+  adc_ring_position++;
+  if(adc_ring_position >= ADC_RING_SIZE) adc_ring_position = 0;
+
+  // store the latest adc values
   for (int i = 0; i < PIN_COUNT_ADC; i++) {
-    adc_values[i] = analogRead(adc_pins[i]);
+    adc_ring_buffer[i][adc_ring_position] = analogRead(adc_pins[i]);
+  }
+
+  // update our sample count
+  sample_count++;
+}
+
+uint32_t read_analog(uint32_t channel, bool buffered_value) {
+  uint32_t adc_bits_sum = 0;
+
+  // make sure we got a channel in the requested range
+  if(channel >= PIN_COUNT_ADC) {
+    // invalid channel 
+    return 0;
+  } else {
+    // a valid channel was specified, check if we need to return the raw or buffered value
+    // also verify our ring is of an appropriate size (prevent divide by zero)
+    if(buffered_value && ADC_RING_SIZE >= 2) {
+      // if the buffered value is requested return the average of the values in the ring buffer
+      for(int i = 0; i < ADC_RING_SIZE; i++) {
+        adc_bits_sum += adc_ring_buffer[channel][i];
+      }
+
+      return adc_bits_sum / ADC_RING_SIZE;
+    } else {
+      // if the raw unbuffered value is requested simply return the latest sample in the ring buffer
+      return adc_ring_buffer[channel][adc_ring_position];
+    }
   }
 }
 
 
 void respond_to_command() {
+  bool buffered;
   char in = 0;
 
   if (SerialBT.available()) {
@@ -153,12 +191,17 @@ void respond_to_command() {
         break;
 
       /*
-         instant sample of Analog inputs
+         sample Analog input bits
+         a = instant
+         A = ring buffer average
       */
       case 'a':
+      case 'A':
+
+        buffered = (in == 'V');
 
         for (int i = 0; i < PIN_COUNT_ADC; i++) {
-          SerialBT.print(adc_values[i]);
+          SerialBT.print(read_analog(i, buffered));
           if (i < PIN_COUNT_ADC - 1) {
             SerialBT.print(",");
           }
@@ -229,11 +272,20 @@ void respond_to_command() {
         SerialBT.println();
         break;
 
+      /*
+         report the Sample count
+      */
+      case 's':
+        SerialBT.println(sample_count);
+        break;
 
       /*
          instant sample of Analog voltages based on divider network
       */
       case 'v':
+      case 'V':
+
+        buffered = (in == 'V');
 
         /*
            loop through our analog pins
@@ -243,7 +295,7 @@ void respond_to_command() {
           /*
              store our adc reading and solve the pin voltage
           */
-          double v = (double)adc_values[i];
+          double v = (double) read_analog(i, buffered);
           v = v / ADC_MAX_BITS * ADC_MAX_VOLT;
 
 
@@ -315,4 +367,12 @@ void ledOn() {
 
 void ledOff() {
   digitalWrite(PIN_LED, LOW);
+}
+
+void clear_ring_buffer() {
+  for(int i = 0; i < PIN_COUNT_ADC; i++) {
+    for(int j = 0; j < ADC_RING_SIZE; j++) {
+      adc_ring_buffer[i][j] = 0;
+    }
+  }
 }
