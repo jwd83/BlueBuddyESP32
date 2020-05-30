@@ -63,8 +63,8 @@ const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
 const double r1[PIN_COUNT_ADC] = {500000,  500000,  100000, 100000,   0, 0 };
 const double r2[PIN_COUNT_ADC] = {100000,  100000,  100000, 100000,   0, 0 };
 const uint32_t digital_input_pins[PIN_COUNT_DIGITAL_INPUTS] = {
-  PIN_DIGITAL_IN_1, 
-  PIN_DIGITAL_IN_2, 
+  PIN_DIGITAL_IN_1,
+  PIN_DIGITAL_IN_2,
   PIN_DIGITAL_IN_3
 };
 
@@ -87,9 +87,9 @@ void setup() {
   // setup our pins
 
   // setup our digital inputs
-  for(int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
+  for (int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
     pinMode(digital_input_pins[i], INPUT);
-    
+
   }
   pinMode(PIN_LED, OUTPUT);
 
@@ -132,7 +132,7 @@ void loop() {
 void sample_analogs() {
   // increment our position in the ring
   adc_ring_position++;
-  if(adc_ring_position >= ADC_RING_SIZE) adc_ring_position = 0;
+  if (adc_ring_position >= ADC_RING_SIZE) adc_ring_position = 0;
 
   // store the latest adc values
   for (int i = 0; i < PIN_COUNT_ADC; i++) {
@@ -147,15 +147,15 @@ uint32_t read_analog(uint32_t channel, bool buffered_value) {
   uint32_t adc_bits_sum = 0;
 
   // make sure we got a channel in the requested range
-  if(channel >= PIN_COUNT_ADC) {
-    // invalid channel 
+  if (channel >= PIN_COUNT_ADC) {
+    // invalid channel
     return 0;
   } else {
     // a valid channel was specified, check if we need to return the raw or buffered value
     // also verify our ring is of an appropriate size (prevent divide by zero)
-    if(buffered_value && ADC_RING_SIZE >= 2) {
+    if (buffered_value && ADC_RING_SIZE >= 2) {
       // if the buffered value is requested return the average of the values in the ring buffer
-      for(int i = 0; i < ADC_RING_SIZE; i++) {
+      for (int i = 0; i < ADC_RING_SIZE; i++) {
         adc_bits_sum += adc_ring_buffer[channel][i];
       }
 
@@ -370,8 +370,8 @@ void ledOff() {
 }
 
 void clear_ring_buffer() {
-  for(int i = 0; i < PIN_COUNT_ADC; i++) {
-    for(int j = 0; j < ADC_RING_SIZE; j++) {
+  for (int i = 0; i < PIN_COUNT_ADC; i++) {
+    for (int j = 0; j < ADC_RING_SIZE; j++) {
       adc_ring_buffer[i][j] = 0;
     }
   }
