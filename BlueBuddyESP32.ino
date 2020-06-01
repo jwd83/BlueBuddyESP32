@@ -1,15 +1,30 @@
 /*
-   bluebuddy accessory
-   reformat code is Ctrl+T
+  BlueBuddyESP32
 
-   add bridge mode to command mode escape (maybe 32c in a row?)
+    bluebuddy command mode commands
 
+    a     - return latest value ADC value
+    A     - return average of ring buffered ADC value
+    b     - change to bridge mode (usb serial <-> bluetooth serial)
+    d     - return digital inputs
+    h     - return free heap space
+    q     - quit (disconnect and wait for new pairing)
+    r     - return stored resistor network
+    s     - return total analog samples
+    v     - return latest analog voltage (based on resistor network)
+    V     - return average of ring buffered analog voltage (based on resistor network)
+    $     - prepare for a multibyte command....
+    $1xxx - set DAC1 to value xxx (0-255)
+    $2xxx - set DAC2 to value xxx (0-255)
+
+    todo
+
+    add bridge mode to command mode escape (maybe 32c in a row?)
+    add o command to return DAC outputs
 */
 
+// include files
 
-/*
-   include files
-*/
 #include "BluetoothSerial.h" //Header File for Serial Bluetooth, will be added by default into Arduino
 
 
@@ -58,16 +73,24 @@
 /*
    globals
 */
-// const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 32, 33, 34, 35};
-const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
-const double r1[PIN_COUNT_ADC] = {500000,  500000,  100000, 100000,   0, 0 };
-const double r2[PIN_COUNT_ADC] = {100000,  100000,  100000, 100000,   0, 0 };
+
+// immutable globals
+const uint32_t adc_pins[PIN_COUNT_ADC] = {36, 39, 32, 33, 34, 35};
+// const uint32_t adc_pins[PIN_COUNT_ADC] = {0, 3, 4, 5, 6, 7};
+// const double r1[PIN_COUNT_ADC] = {500000,  500000,  100000, 100000,   0, 0 };
+// const double r2[PIN_COUNT_ADC] = {100000,  100000,  100000, 100000,   0, 0 };
+const double r1[PIN_COUNT_ADC] = {0,  0,  0, 0, 0, 0 };
+const double r2[PIN_COUNT_ADC] = {0,  0,  0, 0, 0, 0 };
+
 const uint32_t digital_input_pins[PIN_COUNT_DIGITAL_INPUTS] = {
   PIN_DIGITAL_IN_1,
   PIN_DIGITAL_IN_2,
   PIN_DIGITAL_IN_3
 };
+const uint32_t command_window = 1000;
 
+
+// mutable globals
 BluetoothSerial SerialBT; //Object for Bluetooth
 
 uint32_t loop_mode = MODE_COMMAND;
@@ -76,6 +99,13 @@ uint32_t blink_rate = 1000;
 uint32_t adc_ring_buffer[PIN_COUNT_ADC][ADC_RING_SIZE];
 int32_t adc_ring_position = -1; // start at -1 as we will increment this
 uint32_t sample_count = 0;
+
+// multibyte commands
+bool command_in_progress = false;
+char command_buffer[4];
+uint32_t command_start_time = 0;
+int32_t command_bytes_expected = 0;
+int command_position = 0;
 
 /*
    SETUP
@@ -123,7 +153,7 @@ void loop() {
       break;
     case MODE_COMMAND:
       sample_analogs();
-      respond_to_command();
+      process_commands();
       break;
 
   }
@@ -168,164 +198,254 @@ uint32_t read_analog(uint32_t channel, bool buffered_value) {
 }
 
 
-void respond_to_command() {
-  bool buffered;
-  char in = 0;
+void process_commands() {
+  char in;
+
+  // // multibyte commands
+  // bool command_in_progress = true;
+  // char command_buffer[4];
+  // uint32_t command_start_time = 0;
+  // int32_t command_bytes_expected = 0;
+  // int command_position = 0;
+
+  // check if the command has timed out
+  if (command_in_progress) {
+    if (command_start_time + command_window < millis()) {
+      command_in_progress = false;
+    }
+  }
 
   if (SerialBT.available()) {
     in = SerialBT.read();
-    switch (in) {
-      /*
-         0 turns the LED off
-      */
-      case '0':
-        ledOff();
-        break;
+    // if there is no command in progress process input as usual
+    if (!command_in_progress) {
+      if (in == '$') {
+        // prepare to read a multibyte command
+        command_in_progress = true;
+        command_start_time = millis();
+        command_position = 0;
+      } else {
+        // process single byte responses
+        process_command_reply(in);
+      }
+    } else {
 
+      // there is a multi byte command in progress
 
-      /*
-         1 turns the LED on
-      */
-      case '1':
-        ledOn();
-        break;
+      // if we haven't yet received a byte for this command then we now determinte which command is being sent
+      if (command_position == 0) {
+        // determine which command we are receiving
+        switch (in) {
 
-      /*
-         sample Analog input bits
-         a = instant
-         A = ring buffer average
-      */
-      case 'a':
-      case 'A':
+          // dac output command
+          case '1':
+          case '2':
+            command_bytes_expected = 4;
+            break;
 
-        buffered = (in == 'V');
-
-        for (int i = 0; i < PIN_COUNT_ADC; i++) {
-          SerialBT.print(read_analog(i, buffered));
-          if (i < PIN_COUNT_ADC - 1) {
-            SerialBT.print(",");
-          }
+          // unknown command
+          default:
+            command_in_progress = false;
+            break;
         }
-        SerialBT.println();
-        break;
+      }
 
-      /*
-         change to bridge mode
-      */
-      case 'b':
-        loop_mode = MODE_BRIDGE;
-        break;
-
-      /*
-         get digital states
-      */
-      case 'd':
-        for (int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
-          if (digitalRead(digital_input_pins[i]) == HIGH) {
-            SerialBT.print("1");
-          } else {
-            SerialBT.print("0");
-          }
+      // don't bother processing data for a command not in progress
+      if (command_in_progress) {
+        command_buffer[command_position] = in;
+        command_position++;
+        if (command_position == command_bytes_expected) {
+          process_multibyte_command();
+          command_in_progress = false;
         }
-        SerialBT.println();
-        break;
+      }
+    } // end multibyte command handler
+  }
+}
 
-      /*
-         q quit/disconnect
-      */
-      case 'q':
-        // disconnect
-        SerialBT.end();
+void process_multibyte_command() {
+  char mbc_tmp_chars[4];
+  int mbc_tmp_int;
+  switch (command_buffer[0]) {
+    case '1':
+    case '2':
+      // copy the rest of command into our temp char array
+      mbc_tmp_chars[0] = command_buffer[1];
+      mbc_tmp_chars[1] = command_buffer[2];
+      mbc_tmp_chars[2] = command_buffer[3];
+      // null terminate the our temp char array
+      mbc_tmp_chars[3] = 0;
 
-        // todo investigate adding delay before restarting pairing. device may just reconnect.
-        // using a bluetooth terminal this seems to work fine without delay.
-
-        // begin pairing mode for next device
-        SerialBT.begin("BlueBuddy");
-        break;
-
-      /*
-         report free Heap memory
-      */
-      case 'h':
-        SerialBT.println(ESP.getFreeHeap());
-        break;
+      // convert value to int
+      mbc_tmp_int = constrain(atoi(mbc_tmp_chars), 0, 255);
 
 
-      /*
-         report Resistor divider network
-      */
-      case 'r':
+      // write value to DAC
+      if (command_buffer[0] == '1') dacWrite(PIN_DAC1, mbc_tmp_int);
+      else dacWrite(PIN_DAC2, mbc_tmp_int);
 
-        SerialBT.print("r1,");
-        for (int i = 0; i < PIN_COUNT_ADC; i++) {
-          SerialBT.print(r1[i], 0);
+      // reply DACx,yyy where x = channel and yyy = value
+      SerialBT.print("DAC");
+      SerialBT.print(command_buffer[0]);
+      SerialBT.print(",");
+      SerialBT.println(mbc_tmp_int);
+
+      break;
+  }
+}
+
+void process_command_reply(char in) {
+  bool buffered;
+
+  switch (in) {
+    /*
+       0 turns the LED off
+    */
+    case '0':
+      ledOff();
+      break;
+
+
+    /*
+       1 turns the LED on
+    */
+    case '1':
+      ledOn();
+      break;
+
+    /*
+       sample Analog input bits
+       a = instant
+       A = ring buffer average
+    */
+    case 'a':
+    case 'A':
+
+      buffered = (in == 'V');
+
+      for (int i = 0; i < PIN_COUNT_ADC; i++) {
+        SerialBT.print(read_analog(i, buffered));
+        if (i < PIN_COUNT_ADC - 1) {
           SerialBT.print(",");
         }
-        SerialBT.print("r2,");
-        for (int i = 0; i < PIN_COUNT_ADC; i++) {
-          SerialBT.print(r2[i], 0);
-          if (i < PIN_COUNT_ADC - 1) {
-            SerialBT.print(",");
-          }
+      }
+      SerialBT.println();
+      break;
+
+    /*
+       change to bridge mode
+    */
+    case 'b':
+      loop_mode = MODE_BRIDGE;
+      break;
+
+    /*
+       get digital states
+    */
+    case 'd':
+      for (int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
+        if (digitalRead(digital_input_pins[i]) == HIGH) {
+          SerialBT.print("1");
+        } else {
+          SerialBT.print("0");
         }
-        SerialBT.println();
-        break;
+      }
+      SerialBT.println();
+      break;
+
+    /*
+       report free Heap memory
+    */
+    case 'h':
+      SerialBT.println(ESP.getFreeHeap());
+      break;
+
+    /*
+       q quit/disconnect
+    */
+    case 'q':
+      // disconnect
+      SerialBT.end();
+
+      // todo investigate adding delay before restarting pairing. device may just reconnect.
+      // using a bluetooth terminal this seems to work fine without delay.
+
+      // begin pairing mode for next device
+      SerialBT.begin("BlueBuddy");
+      break;
+
+
+    /*
+       report Resistor divider network
+    */
+    case 'r':
+
+      SerialBT.print("r1,");
+      for (int i = 0; i < PIN_COUNT_ADC; i++) {
+        SerialBT.print(r1[i], 0);
+        SerialBT.print(",");
+      }
+      SerialBT.print("r2,");
+      for (int i = 0; i < PIN_COUNT_ADC; i++) {
+        SerialBT.print(r2[i], 0);
+        if (i < PIN_COUNT_ADC - 1) {
+          SerialBT.print(",");
+        }
+      }
+      SerialBT.println();
+      break;
+
+    /*
+       report the Sample count
+    */
+    case 's':
+      SerialBT.println(sample_count);
+      break;
+
+    /*
+       instant sample of Analog voltages based on divider network
+    */
+    case 'v':
+    case 'V':
+
+      buffered = (in == 'V');
 
       /*
-         report the Sample count
+         loop through our analog pins
       */
-      case 's':
-        SerialBT.println(sample_count);
-        break;
-
-      /*
-         instant sample of Analog voltages based on divider network
-      */
-      case 'v':
-      case 'V':
-
-        buffered = (in == 'V');
+      for (int i = 0; i < PIN_COUNT_ADC; i++) {
 
         /*
-           loop through our analog pins
+           store our adc reading and solve the pin voltage
         */
-        for (int i = 0; i < PIN_COUNT_ADC; i++) {
+        double v = (double) read_analog(i, buffered);
+        v = v / ADC_MAX_BITS * ADC_MAX_VOLT;
 
+
+        /*
+           check if there is a resistor network in place to solve the input signal voltage
+        */
+
+
+        if (r1[i] != 0 && r2[i] != 0) {
           /*
-             store our adc reading and solve the pin voltage
-          */
-          double v = (double) read_analog(i, buffered);
-          v = v / ADC_MAX_BITS * ADC_MAX_VOLT;
-
-
-          /*
-             check if there is a resistor network in place to solve the input signal voltage
+             there is a resistor network, solve original input voltage
           */
 
-
-          if (r1[i] != 0 && r2[i] != 0) {
-            /*
-               there is a resistor network, solve original input voltage
-            */
-
-            v = (v * (r1[i] + r2[i])) / r2[i];
-          }
-          SerialBT.print(v, 3);
-          if (i < PIN_COUNT_ADC - 1) {
-            SerialBT.print(",");
-          }
+          v = (v * (r1[i] + r2[i])) / r2[i];
         }
-        SerialBT.println();
-        break;
-
-    }
+        SerialBT.print(v, 3);
+        if (i < PIN_COUNT_ADC - 1) {
+          SerialBT.print(",");
+        }
+      }
+      SerialBT.println();
+      break;
   }
 }
 
 void bridge_serials() {
   char sbt_read;
-
 
   if (Serial.available()) {
     SerialBT.write(Serial.read());
@@ -334,17 +454,6 @@ void bridge_serials() {
   if (SerialBT.available()) {
     sbt_read = SerialBT.read();
     Serial.write(sbt_read);
-
-    switch (sbt_read) {
-      case 'a':
-        blink_rate = 50;
-        break;
-
-      case 'b':
-        blink_rate = 1000;
-        break;
-
-    }
   }
 }
 
