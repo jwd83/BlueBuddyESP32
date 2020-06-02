@@ -68,7 +68,22 @@
 
 #define ADC_MAX_BITS                  4095.0
 #define ADC_MAX_VOLT                  3.3
-#define ADC_RING_SIZE                 50        /* 50 * 4 * 6 = ~1,200bytes */
+#define ADC_RING_SIZE                 32        // num channels * 4 bytes per sample * ring size
+
+
+// settings to clean up the ESP32 analog inputs that are a bit on the noisy side compared to an atmel
+
+// THESE WORK WELL!
+// #define ADC_DISCARD                   20
+// #define ADC_OVERSAMPLE                20
+// #define ADC_PRE_SAMPLE_DELAY          25
+// #define ADC_DELAY_BEFORE_DISCARD      true
+
+// experimental (these also work well)
+#define ADC_DISCARD                   20
+#define ADC_OVERSAMPLE                10
+#define ADC_PRE_SAMPLE_DELAY          0
+#define ADC_DELAY_BEFORE_DISCARD      true
 
 /*
    globals
@@ -166,11 +181,31 @@ void sample_analogs() {
 
   // store the latest adc values
   for (int i = 0; i < PIN_COUNT_ADC; i++) {
-    adc_ring_buffer[i][adc_ring_position] = analogRead(adc_pins[i]);
+    adc_ring_buffer[i][adc_ring_position] = oversample_adc(adc_pins[i], false);
   }
 
   // update our sample count
   sample_count++;
+}
+
+uint32_t oversample_adc(int channel, bool delay_before_discard) {
+  uint32_t discards = 0;
+  uint32_t readings = 0;
+
+  if (delay_before_discard && ADC_PRE_SAMPLE_DELAY > 0) delayMicroseconds(ADC_PRE_SAMPLE_DELAY);
+
+  for(int i = 0; i < ADC_DISCARD; i++) {
+    discards += analogRead(channel);
+  }
+
+  if (!delay_before_discard && ADC_PRE_SAMPLE_DELAY > 0) delayMicroseconds(ADC_PRE_SAMPLE_DELAY);
+
+  for(int i = 0; i < ADC_OVERSAMPLE; i++) {
+    readings += analogRead(channel);
+
+  }
+
+  return readings / ADC_OVERSAMPLE;
 }
 
 uint32_t read_analog(uint32_t channel, bool buffered_value) {
