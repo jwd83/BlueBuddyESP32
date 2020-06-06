@@ -21,6 +21,7 @@
 
     add bridge mode to command mode escape (maybe 32c in a row?)
     add o command to return DAC outputs
+    document responses
 */
 
 // include files
@@ -194,13 +195,13 @@ uint32_t oversample_adc(int channel, bool delay_before_discard) {
 
   if (delay_before_discard && ADC_PRE_SAMPLE_DELAY > 0) delayMicroseconds(ADC_PRE_SAMPLE_DELAY);
 
-  for(int i = 0; i < ADC_DISCARD; i++) {
+  for (int i = 0; i < ADC_DISCARD; i++) {
     discards += analogRead(channel);
   }
 
   if (!delay_before_discard && ADC_PRE_SAMPLE_DELAY > 0) delayMicroseconds(ADC_PRE_SAMPLE_DELAY);
 
-  for(int i = 0; i < ADC_OVERSAMPLE; i++) {
+  for (int i = 0; i < ADC_OVERSAMPLE; i++) {
     readings += analogRead(channel);
 
   }
@@ -319,12 +320,11 @@ void process_multibyte_command() {
       if (command_buffer[0] == '1') dacWrite(PIN_DAC1, mbc_tmp_int);
       else dacWrite(PIN_DAC2, mbc_tmp_int);
 
-      // reply DACx,yyy where x = channel and yyy = value
-      SerialBT.print("DAC");
+      // reply DAC:x,yyy where x = channel and yyy = value
+      SerialBT.print("DAC:");
       SerialBT.print(command_buffer[0]);
       SerialBT.print(",");
       SerialBT.println(mbc_tmp_int);
-
       break;
   }
 }
@@ -355,8 +355,13 @@ void process_command_reply(char in) {
     */
     case 'a':
     case 'A':
-
-      buffered = (in == 'V');
+      if (in == 'A') {
+        buffered = true;
+        SerialBT.print("A:");
+      } else {
+        buffered = false;
+        SerialBT.print("a:");
+      }
 
       for (int i = 0; i < PIN_COUNT_ADC; i++) {
         SerialBT.print(read_analog(i, buffered));
@@ -378,6 +383,7 @@ void process_command_reply(char in) {
        get digital states
     */
     case 'd':
+      SerialBT.print("d:");
       for (int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
         if (digitalRead(digital_input_pins[i]) == HIGH) {
           SerialBT.print("1");
@@ -414,7 +420,7 @@ void process_command_reply(char in) {
        report Resistor divider network
     */
     case 'r':
-
+      SerialBT.print("r:");
       SerialBT.print("r1,");
       for (int i = 0; i < PIN_COUNT_ADC; i++) {
         SerialBT.print(r1[i], 0);
@@ -434,6 +440,7 @@ void process_command_reply(char in) {
        report the Sample count
     */
     case 's':
+      SerialBT.print("s:");
       SerialBT.println(sample_count);
       break;
 
@@ -442,8 +449,13 @@ void process_command_reply(char in) {
     */
     case 'v':
     case 'V':
-
-      buffered = (in == 'V');
+      if (in == 'V') {
+        buffered = true;
+        SerialBT.print("V:");
+      } else {
+        buffered = false;
+        SerialBT.print("v:");
+      }
 
       /*
          loop through our analog pins
