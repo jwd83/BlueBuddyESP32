@@ -1,21 +1,26 @@
 /*
   BlueBuddyESP32
 
-    bluebuddy command mode commands
+    bluebuddy command mode commands/responses
 
-    a     - return latest value ADC value
-    A     - return average of ring buffered ADC value
-    b     - change to bridge mode (usb serial <-> bluetooth serial)
-    d     - return digital inputs
-    h     - return free heap space
-    q     - quit (disconnect and wait for new pairing)
-    r     - return stored resistor network
-    s     - return total analog samples
-    v     - return latest analog voltage (based on resistor network)
-    V     - return average of ring buffered analog voltage (based on resistor network)
-    $     - prepare for a multibyte command....
-    $1xxx - set DAC1 to value xxx (0-255)
-    $2xxx - set DAC2 to value xxx (0-255)
+    single byte commands
+
+    a     - a:xxx,...     - return latest value ADC value
+    A     - A:xxx,...     - return average of ring buffered ADC value
+    b     - [none]        - change to bridge mode (usb serial <-> bluetooth serial)
+    d     - d:xxx         - return digital inputs
+    h     - h:xxx         - return free heap space
+    q     - [none]        - quit (disconnect and wait for new pairing)
+    r     - r:r1,xxx,etc  - return stored resistor network
+    s     - s:xxx         - return total analog samples
+    v     - v:xxx,...     - return latest analog voltage (based on resistor network)
+    V     - V:xxx,...     - return average of ring buffered analog voltage (based on resistor network)
+
+    multibyte commands (prefaced with $)
+    
+    $                     - prepare for a multibyte command....
+    $1xxx - DAC:1,xxx...  - set DAC1 to value xxx (0-255)
+    $2xxx - DAC:2,xxx...  - set DAC2 to value xxx (0-255)
 
     todo
 
@@ -398,6 +403,7 @@ void process_command_reply(char in) {
        report free Heap memory
     */
     case 'h':
+      SerialBT.print("h:");
       SerialBT.println(ESP.getFreeHeap());
       break;
 
