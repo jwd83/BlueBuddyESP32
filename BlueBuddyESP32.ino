@@ -17,7 +17,7 @@
     V     - V:xxx,...     - return average of ring buffered analog voltage (based on resistor network)
 
     multibyte commands (prefaced with $)
-    
+
     $                     - prepare for a multibyte command....
     $1xxx - DAC:1,xxx...  - set DAC1 to value xxx (0-255)
     $2xxx - DAC:2,xxx...  - set DAC2 to value xxx (0-255)
@@ -241,13 +241,6 @@ uint32_t read_analog(uint32_t channel, bool buffered_value) {
 
 void process_commands() {
   char in;
-
-  // // multibyte commands
-  // bool command_in_progress = true;
-  // char command_buffer[4];
-  // uint32_t command_start_time = 0;
-  // int32_t command_bytes_expected = 0;
-  // int command_position = 0;
 
   // check if the command has timed out
   if (command_in_progress) {
