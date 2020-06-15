@@ -10,6 +10,7 @@
     b     - [none]        - change to bridge mode (usb serial <-> bluetooth serial)
     d     - d:xxx         - return digital inputs
     h     - h:xxx         - return free heap space
+    p     - p:xxx,...     - return the peak high/low values seen by the ADC for each channel and reset them
     q     - [none]        - quit (disconnect and wait for new pairing)
     r     - r:r1,xxx,etc  - return stored resistor network
     s     - s:xxx         - return total analog samples
@@ -120,6 +121,7 @@ uint32_t blink_rate = 1000;
 uint32_t adc_ring_buffer[PIN_COUNT_ADC][ADC_RING_SIZE];
 int32_t adc_ring_position = -1; // start at -1 as we will increment this
 uint32_t sample_count = 0;
+uint32_t adc_peaks[PIN_COUNT_ADC * 2];
 
 // multibyte commands
 bool command_in_progress = false;
@@ -241,6 +243,13 @@ uint32_t read_analog(uint32_t channel, bool buffered_value) {
 
 void process_commands() {
   char in;
+
+  // // multibyte commands
+  // bool command_in_progress = true;
+  // char command_buffer[4];
+  // uint32_t command_start_time = 0;
+  // int32_t command_bytes_expected = 0;
+  // int command_position = 0;
 
   // check if the command has timed out
   if (command_in_progress) {
