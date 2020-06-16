@@ -10,7 +10,7 @@
     b     - [none]        - change to bridge mode (usb serial <-> bluetooth serial)
     d     - d:xxx         - return digital inputs
     h     - h:xxx         - return free heap space
-    p     - p:xxx,...     - return the peak high/low values seen by the ADC for each channel and reset them
+    p     - p:xxx,...     - return analog data from bbADC (summed average, min, max, sample count)
     q     - [none]        - quit (disconnect and wait for new pairing)
     r     - r:r1,xxx,etc  - return stored resistor network
     s     - s:xxx         - return total analog samples
@@ -33,7 +33,7 @@
 // include files
 
 #include "BluetoothSerial.h" //Header File for Serial Bluetooth, will be added by default into Arduino
-
+#include "bbadc.h"
 
 /*
    constants/pin definitions
@@ -93,6 +93,10 @@
 #define ADC_DELAY_BEFORE_DISCARD      true
 
 /*
+  structures
+*/
+
+/*
    globals
 */
 
@@ -121,7 +125,8 @@ uint32_t blink_rate = 1000;
 uint32_t adc_ring_buffer[PIN_COUNT_ADC][ADC_RING_SIZE];
 int32_t adc_ring_position = -1; // start at -1 as we will increment this
 uint32_t sample_count = 0;
-uint32_t adc_peaks[PIN_COUNT_ADC * 2];
+BBADC bbADC[PIN_COUNT_ADC];
+
 
 // multibyte commands
 bool command_in_progress = false;
@@ -142,10 +147,8 @@ void setup() {
   // setup our digital inputs
   for (int i = 0; i < PIN_COUNT_DIGITAL_INPUTS; i++) {
     pinMode(digital_input_pins[i], INPUT);
-
   }
   pinMode(PIN_LED, OUTPUT);
-
 
   // turn LED solid when booting
   ledOn();
@@ -161,6 +164,9 @@ void setup() {
 
   // clear ring buffer out
   clear_ring_buffer();
+
+  // reset our new analog filtering class
+  resetBBADC();
 }
 
 /*
@@ -182,14 +188,24 @@ void loop() {
   }
 }
 
+void resetBBADC() {
+  for(int i = 0; i < PIN_COUNT_ADC; i++) {
+    bbADC[i].reset();
+  }
+}
+
 void sample_analogs() {
+  uint32_t reading;
+
   // increment our position in the ring
   adc_ring_position++;
   if (adc_ring_position >= ADC_RING_SIZE) adc_ring_position = 0;
 
   // store the latest adc values
   for (int i = 0; i < PIN_COUNT_ADC; i++) {
-    adc_ring_buffer[i][adc_ring_position] = oversample_adc(adc_pins[i], false);
+    reading = oversample_adc(adc_pins[i], ADC_DELAY_BEFORE_DISCARD);
+    adc_ring_buffer[i][adc_ring_position] = reading;
+    bbADC[i].addSample(reading);
   }
 
   // update our sample count
@@ -407,6 +423,25 @@ void process_command_reply(char in) {
     case 'h':
       SerialBT.print("h:");
       SerialBT.println(ESP.getFreeHeap());
+      break;
+
+    /*
+       dump and reset our custom analog filtering class
+    */
+    case 'p':
+      SerialBT.print("p:");
+      SerialBT.print(bbADC[0].getSamples());  // all channels are sampled evenly so we only need to report this once
+      for(int i = 0; i < PIN_COUNT_ADC; i++) {
+        SerialBT.print(",");
+        SerialBT.print(bbADC[i].getSum());
+        SerialBT.print(",");
+        SerialBT.print(bbADC[i].getMin());
+        SerialBT.print(",");
+        SerialBT.print(bbADC[i].getMax());
+      }
+      SerialBT.println();
+
+      resetBBADC();
       break;
 
     /*
