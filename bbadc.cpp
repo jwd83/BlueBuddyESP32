@@ -13,12 +13,15 @@ void BBADC::reset() {
 }
 
 void BBADC::addSample(uint32_t adc_value) {
-  // technically we can overflow the sum after ~1048832 samples of 4095
-  // so if we reach 1000000 samples without being reset it's time to reset ourselves
+  // technically we can overflow the sum after ~1,048,832 samples of 4095
+  // once we reach a million samples divide our sample counter and sum in half
+  // this will allow us to keep the peaks ovserved and keep a runnign average
+  if (_adc_samples >= 1000000) {
+    _adc_samples /= 2;
+    _adc_sum /= 2;
 
-  if (_adc_samples > 1000000) {
-    reset();
   }
+
   _adc_samples++;
   _adc_sum += adc_value;
 
